@@ -18,6 +18,9 @@ const (
 //TransactionLock is the global transaction mutex
 var TransactionLock *sync.Mutex
 
+//TChannel is used to communicate with StartTransactionManager
+var TChannel = make(chan Transaction)
+
 //Transaction instance definition.
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
@@ -116,11 +119,14 @@ func (TM *Manager) PopTransactionQueue() {
 	TM.TransactionQueue = TM.TransactionQueue[1:]
 }
 
-//AddTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
-func (TM *Manager) AddTransactionToQueue(Commands []interface{}) {
-	T := NewTransaction(Commands)
+//PopExcecutiontionQueue pops the first transaction in the excecution batch.
+func (TM *Manager) PopExcecutiontionQueue() {
+	TM.ExcecutionBatch = TM.ExcecutionBatch[1:]
+}
 
-	TM.TransactionQueue = append(TM.TransactionQueue, T)
+//AddTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
+func (TM *Manager) AddTransactionToQueue(t Transaction) {
+	TM.TransactionQueue = append(TM.TransactionQueue, t)
 }
 
 /*PrepareExcecutionBatch adds BATCH_SIZE amount of Transactions from the TransactionManager
@@ -144,7 +150,37 @@ func (TM *Manager) PrepareExcecutionBatch() {
 
 //ExcecuteBatch Transactions are executed serialized.
 func (TM *Manager) ExcecuteBatch() {
-	for index := 0; index < BatchSize; index++ {
+	for index := 0; index < len(TM.ExcecutionBatch); index++ {
 		go TM.ExcecutionBatch[index].ExcecuteTransaction()
+	}
+
+	for index := 0; index < len(TM.ExcecutionBatch); index++ {
+		TM.PopTransactionQueue()
+	}
+}
+
+//AddTransactionToManager sends Transactions to Manager through a channel.
+func AddTransactionToManager(t Transaction) {
+	TChannel <- t
+}
+
+/*StartTransactionManager is ment to be called once by the engine, afterwards it will receive incoming
+transactions and will add them to its queue and then will excecute them by moving it into the excecution
+batch.*/
+func StartTransactionManager() {
+	TransactionManager := NewTransactionManager()
+	for {
+		transaction := <-TChannel
+		TransactionManager.AddTransactionToQueue(transaction)
+
+		if len(TransactionManager.TransactionQueue) != 0 {
+			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
+				go TransactionManager.TransactionQueue[index].ExcecuteTransaction()
+			}
+
+			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
+				TransactionManager.PopTransactionQueue()
+			}
+		}
 	}
 }
