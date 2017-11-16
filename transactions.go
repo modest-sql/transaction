@@ -20,10 +20,10 @@ var TransactionLock *sync.Mutex
 
 //Transaction instance definition.
 type Transaction struct {
-	TransactionID         xid.ID        `json:"Transaction_ID"`
-	TransactionQueries    []string      `json:"TransactionQueries"`
-	CommandsInTransaction []interface{} `json:"TransactionCommands"`
-	TransactionState      int           `json:"Transaction_State"`
+	TransactionID         xid.ID   `json:"Transaction_ID"`
+	TransactionQueries    []string `json:"TransactionQueries"`
+	commandsInTransaction []interface{}
+	TransactionState      int `json:"Transaction_State"`
 }
 
 //NewTransaction creates an instance of Transaction.
@@ -32,7 +32,7 @@ func NewTransaction(Commands []interface{}) Transaction {
 		xid.New(),
 		make([]string, len(Commands)),
 		Commands,
-		0,
+		Queued,
 	}
 
 	T.ParseCommandsToQueries()
@@ -43,8 +43,8 @@ func NewTransaction(Commands []interface{}) Transaction {
 /*ParseCommandsToQueries interprets the commands in a Transaction and
 stores a queries relative to those commands.*/
 func (T *Transaction) ParseCommandsToQueries() {
-	for index := 0; index < len(T.CommandsInTransaction); index++ {
-		switch v := T.CommandsInTransaction[index].(type) {
+	for index := 0; index < len(T.commandsInTransaction); index++ {
+		switch v := T.commandsInTransaction[index].(type) {
 		case *common.CreateTableCommand:
 			CTC := common.CreateTableCommand(*v)
 			T.TransactionQueries[index] = "CREATE TABLE " + CTC.TableName() + "."
@@ -62,10 +62,10 @@ func (T *Transaction) ParseCommandsToQueries() {
 
 //ExcecuteTransaction excectes the commands inside a transaction.
 func (T *Transaction) ExcecuteTransaction() {
-	T.TransactionState = 1
 	TransactionLock.Lock()
-	for subindex := 0; subindex < len(T.CommandsInTransaction); subindex++ {
-		switch v := T.CommandsInTransaction[subindex].(type) {
+	T.TransactionState = InProgress
+	for subindex := 0; subindex < len(T.commandsInTransaction); subindex++ {
+		switch v := T.commandsInTransaction[subindex].(type) {
 		case *common.CreateTableCommand:
 			CTC := common.CreateTableCommand(*v)
 			CTC.Excecute()
@@ -79,7 +79,7 @@ func (T *Transaction) ExcecuteTransaction() {
 		}
 	}
 	TransactionLock.Unlock()
-	T.TransactionState = 2
+	T.TransactionState = Done
 }
 
 //Manager instance definition.
@@ -94,6 +94,21 @@ func NewTransactionManager() Manager {
 		make([]Transaction, 0),
 		make([]Transaction, 0),
 	}
+}
+
+//GetTransactions returns a Transaction array containing both, Transactions in queue and in excution batch.
+func (TM *Manager) GetTransactions() []Transaction {
+	Transactions := make([]Transaction, 0)
+
+	for index := 0; index < len(TM.ExcecutionBatch); index++ {
+		Transactions = append(Transactions, TM.ExcecutionBatch[index])
+	}
+
+	for index := 0; index < len(TM.TransactionQueue); index++ {
+		Transactions = append(Transactions, TM.TransactionQueue[index])
+	}
+
+	return Transactions
 }
 
 //PopTransactionQueue pops the first transaction in the queue.
