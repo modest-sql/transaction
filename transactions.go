@@ -3,6 +3,8 @@ package transaction
 import (
 	"sync"
 
+	"github.com/modest-sql/data"
+
 	"github.com/modest-sql/common"
 	"github.com/rs/xid"
 )
@@ -54,7 +56,7 @@ func (T *Transaction) ParseCommandsToQueries() {
 
 		case *common.SelectTableCommand:
 			STC := common.SelectTableCommand(*v)
-			T.TransactionQueries[index] = "SELECT * FROM TABLE " + STC.SourceTableName() + "."
+			T.TransactionQueries[index] = "SELECT * FROM TABLE " + STC.SourceTable() + "."
 
 		default:
 			T.TransactionQueries[index] = "UNKNOWN QUERY."
@@ -64,23 +66,10 @@ func (T *Transaction) ParseCommandsToQueries() {
 }
 
 //ExcecuteTransaction excectes the commands inside a transaction.
-func (T *Transaction) ExcecuteTransaction() {
+func (T *Transaction) ExcecuteTransaction(DB data.Database) {
 	TransactionLock.Lock()
 	T.TransactionState = InProgress
-	for subindex := 0; subindex < len(T.commandsInTransaction); subindex++ {
-		switch v := T.commandsInTransaction[subindex].(type) {
-		case *common.CreateTableCommand:
-			CTC := common.CreateTableCommand(*v)
-			CTC.Excecute()
-
-		case *common.SelectTableCommand:
-			STC := common.SelectTableCommand(*v)
-			STC.Excecute()
-
-		default:
-			_ = v
-		}
-	}
+	DB.ExecuteCommand(T.commandsInTransaction)
 	TransactionLock.Unlock()
 	T.TransactionState = Done
 }
@@ -151,7 +140,7 @@ func (TM *Manager) PrepareExcecutionBatch() {
 //ExcecuteBatch Transactions are executed serialized.
 func (TM *Manager) ExcecuteBatch() {
 	for index := 0; index < len(TM.ExcecutionBatch); index++ {
-		go TM.ExcecutionBatch[index].ExcecuteTransaction()
+		//go TM.ExcecutionBatch[index].ExcecuteTransaction()
 	}
 
 	for index := 0; index < len(TM.ExcecutionBatch); index++ {
@@ -167,7 +156,7 @@ func AddTransactionToManager(t Transaction) {
 /*StartTransactionManager is ment to be called once by the engine, afterwards it will receive incoming
 transactions and will add them to its queue and then will excecute them by moving it into the excecution
 batch.*/
-func StartTransactionManager() {
+func StartTransactionManager(DB data.Database) {
 	TransactionManager := NewTransactionManager()
 	for {
 		transaction := <-TChannel
@@ -175,7 +164,7 @@ func StartTransactionManager() {
 
 		if len(TransactionManager.TransactionQueue) != 0 {
 			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
-				go TransactionManager.TransactionQueue[index].ExcecuteTransaction()
+				go TransactionManager.TransactionQueue[index].ExcecuteTransaction(DB)
 			}
 
 			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
