@@ -8,13 +8,17 @@ import (
 )
 
 //Transaction States.
-// 1 -> QUEUED
-// 2 -> IN PROGRESS
-// 3 -> DONE
+const (
+	Queued = iota
+	InProgress
+	Done
+	BatchSize = 5
+)
 
-//Batch size defines the amount of transactions to be scheduled at once.
-const BATCH_SIZE = 5
+//TransactionLock is the global transaction mutex
+var TransactionLock *sync.Mutex
 
+//Transaction instance definition.
 type Transaction struct {
 	TransactionID         xid.ID        `json:"Transaction_ID"`
 	TransactionQueries    []string      `json:"TransactionQueries"`
@@ -28,7 +32,7 @@ func NewTransaction(Commands []interface{}) Transaction {
 		xid.New(),
 		make([]string, len(Commands)),
 		Commands,
-		1,
+		0,
 	}
 
 	T.ParseCommandsToQueries()
@@ -56,23 +60,49 @@ func (T *Transaction) ParseCommandsToQueries() {
 	}
 }
 
-type TransactionManager struct {
-	TransactionLock  *sync.Mutex
+//ExcecuteTransaction excectes the commands inside a transaction.
+func (T *Transaction) ExcecuteTransaction() {
+	T.TransactionState = 1
+	TransactionLock.Lock()
+	for subindex := 0; subindex < len(T.CommandsInTransaction); subindex++ {
+		switch v := T.CommandsInTransaction[subindex].(type) {
+		case *common.CreateTableCommand:
+			CTC := common.CreateTableCommand(*v)
+			CTC.Excecute()
+
+		case *common.SelectTableCommand:
+			STC := common.SelectTableCommand(*v)
+			STC.Excecute()
+
+		default:
+			_ = v
+		}
+	}
+	TransactionLock.Unlock()
+	T.TransactionState = 2
+}
+
+//Manager instance definition.
+type Manager struct {
 	TransactionQueue []Transaction `json:"TransactionQueue"`
 	ExcecutionBatch  []Transaction `json:"ExcecutionBatch"`
 }
 
 //NewTransactionManager creates an instance of TransactionManger.
-func NewTransactionManager() TransactionManager {
-	return TransactionManager{
-		&sync.Mutex{},
+func NewTransactionManager() Manager {
+	return Manager{
 		make([]Transaction, 0),
 		make([]Transaction, 0),
 	}
 }
 
+//PopTransactionQueue pops the first transaction in the queue.
+func (TM *Manager) PopTransactionQueue() {
+	TM.TransactionQueue = TM.TransactionQueue[1:]
+}
+
 //AddTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
-func (TM *TransactionManager) AddTransactionToQueue(Commands []interface{}) {
+func (TM *Manager) AddTransactionToQueue(Commands []interface{}) {
 	T := NewTransaction(Commands)
 
 	TM.TransactionQueue = append(TM.TransactionQueue, T)
@@ -80,38 +110,26 @@ func (TM *TransactionManager) AddTransactionToQueue(Commands []interface{}) {
 
 /*PrepareExcecutionBatch adds BATCH_SIZE amount of Transactions from the TransactionManager
 TransactionQueue into the ExcecutionQueue for them to be excecuted.*/
-func (TM *TransactionManager) PrepareExcecutionBatch() {
-	if len(TM.TransactionQueue) > BATCH_SIZE {
-		for index := 0; index < BATCH_SIZE; index++ {
+func (TM *Manager) PrepareExcecutionBatch() {
+	if len(TM.TransactionQueue) > BatchSize {
+		for index := 0; index < BatchSize; index++ {
 			TM.ExcecutionBatch[index] = TM.TransactionQueue[index]
 		}
+		for index := 0; index < BatchSize; index++ {
+			TM.PopTransactionQueue()
+		}
+
 	} else {
-		for index := 0; index < len(TM.TransactionQueue); index++ {
+		for index := 0; len(TM.TransactionQueue) != 0; index++ {
 			TM.ExcecutionBatch[index] = TM.TransactionQueue[index]
+			TM.PopTransactionQueue()
 		}
 	}
 }
 
-//Transactions are executed serialized.
-func (TM *TransactionManager) ExcecuteBatch() {
-	for index := 0; index < BATCH_SIZE; index++ {
-		TM.TransactionLock.Lock()
-		TM.ExcecutionBatch[index].TransactionState = 2
-		for subindex := 0; subindex < len(TM.ExcecutionBatch[index].CommandsInTransaction); subindex++ {
-			switch v := TM.ExcecutionBatch[index].CommandsInTransaction[index].(type) {
-			case *common.CreateTableCommand:
-				CTC := common.CreateTableCommand(*v)
-				go CTC.Excecute()
-
-			case *common.SelectTableCommand:
-				STC := common.SelectTableCommand(*v)
-				go STC.Excecute()
-
-			default:
-				_ = v
-			}
-		}
-		TM.TransactionLock.Unlock()
-		TM.ExcecutionBatch[index].TransactionState = 3
+//ExcecuteBatch Transactions are executed serialized.
+func (TM *Manager) ExcecuteBatch() {
+	for index := 0; index < BatchSize; index++ {
+		go TM.ExcecutionBatch[index].ExcecuteTransaction()
 	}
 }
