@@ -13,7 +13,7 @@ import (
 // 3 -> DONE
 
 //Batch size defines the amount of transactions to be scheduled at once.
-var BATCH_SIZE = 5
+const BATCH_SIZE = 5
 
 type Transaction struct {
 	TransactionID         xid.ID        `json:"Transaction_ID"`
@@ -25,7 +25,7 @@ type Transaction struct {
 //NewTransaction creates an instance of Transaction.
 func NewTransaction(Commands []interface{}) Transaction {
 	T := Transaction{
-		GenerateXID(),
+		xid.New(),
 		make([]string, len(Commands)),
 		Commands,
 		1,
@@ -54,12 +54,6 @@ func (T *Transaction) ParseCommandsToQueries() {
 			_ = v
 		}
 	}
-}
-
-//GenerateXID function generates unique ID's.
-func GenerateXID() xid.ID {
-	ID := xid.New()
-	return ID
 }
 
 type TransactionManager struct {
@@ -107,11 +101,11 @@ func (TM *TransactionManager) ExcecuteBatch() {
 			switch v := TM.ExcecutionBatch[index].CommandsInTransaction[index].(type) {
 			case *common.CreateTableCommand:
 				CTC := common.CreateTableCommand(*v)
-				CTC.Excecute()
+				go CTC.Excecute()
 
 			case *common.SelectTableCommand:
 				STC := common.SelectTableCommand(*v)
-				STC.Excecute()
+				go STC.Excecute()
 
 			default:
 				_ = v
