@@ -23,6 +23,12 @@ var TransactionLock *sync.Mutex
 //TChannel is used to communicate with StartTransactionManager
 var TChannel = make(chan Transaction)
 
+//TRChannel is used to deliver the result of the treansactions.
+var TRChannel = make(chan []interface{})
+
+//TEChannel is used to deliver the errors, if any, of the transactions.
+var TEChannel = make(chan []error)
+
 //Transaction instance definition.
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
@@ -69,7 +75,19 @@ func (T *Transaction) ParseCommandsToQueries() {
 func (T *Transaction) ExcecuteTransaction(DB data.Database) {
 	TransactionLock.Lock()
 	T.TransactionState = InProgress
-	DB.ExecuteCommand(T.commandsInTransaction)
+
+	ExcecutionResults := make([]interface{}, 0)
+	ExcecutionErrors := make([]error, 0)
+
+	for index := 0; index < len(T.commandsInTransaction); index++ {
+		ExcecutionResult, ExcecutionError := DB.ExecuteCommand(T.commandsInTransaction[index])
+		ExcecutionResults = append(ExcecutionResults, ExcecutionResult)
+		ExcecutionErrors = append(ExcecutionErrors, ExcecutionError)
+	}
+
+	TRChannel <- ExcecutionResults
+	TEChannel <- ExcecutionErrors
+
 	TransactionLock.Unlock()
 	T.TransactionState = Done
 }
@@ -171,5 +189,8 @@ func StartTransactionManager(DB data.Database) {
 				TransactionManager.PopTransactionQueue()
 			}
 		}
+
+		transactionResults := <-TRChannel
+		transactionErrors := <-TEChannel
 	}
 }
