@@ -72,7 +72,7 @@ func (T *Transaction) ParseCommandsToQueries() {
 }
 
 //ExcecuteTransaction excectes the commands inside a transaction.
-func (T *Transaction) ExcecuteTransaction(DB data.Database) {
+func (T *Transaction) ExcecuteTransaction(DB *data.Database) {
 	TransactionLock.Lock()
 	T.TransactionState = InProgress
 
@@ -174,7 +174,7 @@ func AddTransactionToManager(t Transaction) {
 /*StartTransactionManager is ment to be called once by the engine, afterwards it will receive incoming
 transactions and will add them to its queue and then will excecute them by moving it into the excecution
 batch.*/
-func StartTransactionManager(DB data.Database) {
+func StartTransactionManager(DB *data.Database) {
 	TransactionManager := NewTransactionManager()
 	for {
 		transaction := <-TChannel
@@ -185,12 +185,12 @@ func StartTransactionManager(DB data.Database) {
 				go TransactionManager.TransactionQueue[index].ExcecuteTransaction(DB)
 			}
 
-			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
+			for index := 0; len(TransactionManager.TransactionQueue) != 0; index++ {
 				TransactionManager.PopTransactionQueue()
 			}
 		}
 
-		transactionResults := <-TRChannel
-		transactionErrors := <-TEChannel
+		//transactionResults := <-TRChannel
+		//transactionErrors := <-TEChannel
 	}
 }
