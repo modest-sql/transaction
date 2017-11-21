@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/modest-sql/data"
@@ -18,7 +19,7 @@ const (
 )
 
 //TransactionLock is the global transaction mutex
-var TransactionLock *sync.Mutex
+var TransactionLock sync.Mutex
 
 //TChannel is used to communicate with StartTransactionManager
 var TChannel = make(chan Transaction)
@@ -85,8 +86,10 @@ func (T *Transaction) ExcecuteTransaction(DB *data.Database) {
 		ExcecutionErrors = append(ExcecutionErrors, ExcecutionError)
 	}
 
+	//fmt.Println(ExcecutionResults[0])
+
 	TRChannel <- ExcecutionResults
-	TEChannel <- ExcecutionErrors
+	//TEChannel <- ExcecutionErrors
 
 	TransactionLock.Unlock()
 	T.TransactionState = Done
@@ -175,10 +178,12 @@ func AddTransactionToManager(t Transaction) {
 transactions and will add them to its queue and then will excecute them by moving it into the excecution
 batch.*/
 func StartTransactionManager(DB *data.Database) {
-	TransactionManager := NewTransactionManager()
+	//TransactionManager := NewTransactionManager()
 	for {
 		transaction := <-TChannel
-		TransactionManager.AddTransactionToQueue(transaction)
+		go transaction.ExcecuteTransaction(DB)
+		fmt.Println("EJECUTO.")
+		/*TransactionManager.AddTransactionToQueue(transaction)
 
 		if len(TransactionManager.TransactionQueue) != 0 {
 			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
@@ -188,9 +193,63 @@ func StartTransactionManager(DB *data.Database) {
 			for index := 0; len(TransactionManager.TransactionQueue) != 0; index++ {
 				TransactionManager.PopTransactionQueue()
 			}
-		}
+		}*/
 
-		//transactionResults := <-TRChannel
+		transactionResults := <-TRChannel
+		fmt.Println(transactionResults)
 		//transactionErrors := <-TEChannel
+		//fmt.Println(transactionErrors)*/
 	}
 }
+
+/*
+func main() {
+	fmt.Println("TESTGROUND")
+
+	Database, _ := data.NewDatabase("Test_Database")
+
+	IC := common.NewIntegerTableColumn("ID", 0, false, false)
+	CC := common.NewCharTableColumn("Name", "-", false, false, 20)
+
+	TCD := make([]common.TableColumnDefiner, 0)
+
+	TCD = append(TCD, IC)
+	TCD = append(TCD, CC)
+
+	CTC1 := common.NewCreateTableCommand("TEST_TABLE_1", TCD)
+	CTC2 := common.NewCreateTableCommand("TEST_TABLE_2", TCD)
+	CTC3 := common.NewCreateTableCommand("TEST_TABLE_3", TCD)
+	//CTC4 := common.NewCreateTableCommand("TEST_TABLE_4", TCD)
+
+	COMMANDS := make([]interface{}, 0)
+
+	COMMANDS = append(COMMANDS, CTC1)
+	COMMANDS = append(COMMANDS, CTC2)
+	COMMANDS = append(COMMANDS, CTC3)
+	//COMMANDS = append(COMMANDS, CTC4)
+
+	TRANSACTION := NewTransaction(COMMANDS)
+
+	for index := 0; index < len(TRANSACTION.commandsInTransaction); index++ {
+		switch TRANSACTION.commandsInTransaction[index].(type) {
+		case *common.CreateTableCommand:
+			fmt.Println("CREATE")
+		case *common.InsertCommand:
+			fmt.Println("INSERT")
+		case *common.SelectTableCommand:
+			fmt.Println("SELECT")
+		}
+	}
+
+	go StartTransactionManager(Database)
+
+	TChannel <- TRANSACTION
+	//TChannel <- TRANSACTION
+	//TChannel <- TRANSACTION
+	//TChannel <- TRANSACTION
+
+	time.Sleep(4000 * time.Millisecond)
+
+	fmt.Println(Database.AllTables())
+}
+*/
