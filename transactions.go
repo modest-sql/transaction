@@ -18,11 +18,11 @@ const (
 	BatchSize = 5
 )
 
-//TransactionLock is the global transaction mutex
-var TransactionLock sync.Mutex
+//transactionLock is the global transaction mutex
+var transactionLock sync.Mutex
 
 //TChannel is used to communicate with StartTransactionManager
-var TChannel = make(chan Transaction)
+var TChannel = make(chan transaction)
 
 //TRChannel is used to deliver the result of the treansactions.
 var TRChannel = make(chan []interface{})
@@ -30,31 +30,31 @@ var TRChannel = make(chan []interface{})
 //TEChannel is used to deliver the errors, if any, of the transactions.
 var TEChannel = make(chan []error)
 
-//Transaction instance definition.
-type Transaction struct {
+//transaction instance definition.
+type transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
 	commandsInTransaction []interface{}
 	TransactionState      int `json:"Transaction_State"`
 }
 
-//NewTransaction creates an instance of Transaction.
-func NewTransaction(Commands []interface{}) Transaction {
-	T := Transaction{
+//newTransaction creates an instance of Transaction.
+func newTransaction(Commands []interface{}) transaction {
+	T := transaction{
 		xid.New(),
 		make([]string, len(Commands)),
 		Commands,
 		Queued,
 	}
 
-	T.ParseCommandsToQueries()
+	T.parseCommandsToQueries()
 
 	return T
 }
 
-/*ParseCommandsToQueries interprets the commands in a Transaction and
+/*parseCommandsToQueries interprets the commands in a Transaction and
 stores a queries relative to those commands.*/
-func (T *Transaction) ParseCommandsToQueries() {
+func (T *transaction) parseCommandsToQueries() {
 	for index := 0; index < len(T.commandsInTransaction); index++ {
 		switch v := T.commandsInTransaction[index].(type) {
 		case *common.CreateTableCommand:
@@ -72,9 +72,9 @@ func (T *Transaction) ParseCommandsToQueries() {
 	}
 }
 
-//ExcecuteTransaction excectes the commands inside a transaction.
-func (T *Transaction) ExcecuteTransaction(DB *data.Database) {
-	TransactionLock.Lock()
+//excecuteTransaction excectes the commands inside a transaction.
+func (T *transaction) excecuteTransaction(DB *data.Database) {
+	transactionLock.Lock()
 	T.TransactionState = InProgress
 
 	ExcecutionResults := make([]interface{}, 0)
@@ -91,25 +91,25 @@ func (T *Transaction) ExcecuteTransaction(DB *data.Database) {
 	TRChannel <- ExcecutionResults
 	//TEChannel <- ExcecutionErrors
 
-	TransactionLock.Unlock()
+	transactionLock.Unlock()
 	T.TransactionState = Done
 }
 
-//Manager instance definition.
-type Manager struct {
-	TransactionQueue []Transaction `json:"TransactionQueue"`
+//manager instance definition.
+type manager struct {
+	TransactionQueue []transaction `json:"TransactionQueue"`
 }
 
-//NewTransactionManager creates an instance of TransactionManger.
-func NewTransactionManager() Manager {
-	return Manager{
-		make([]Transaction, 0),
+//newTransactionManager creates an instance of TransactionManger.
+func newTransactionManager() manager {
+	return manager{
+		make([]transaction, 0),
 	}
 }
 
 //GetTransactions returns a Transaction array containing both, Transactions in queue and in excution batch.
-func (TM *Manager) GetTransactions() []Transaction {
-	Transactions := make([]Transaction, 0)
+func (TM *manager) GetTransactions() []transaction {
+	Transactions := make([]transaction, 0)
 
 	for index := 0; index < len(TM.TransactionQueue); index++ {
 		Transactions = append(Transactions, TM.TransactionQueue[index])
@@ -118,18 +118,18 @@ func (TM *Manager) GetTransactions() []Transaction {
 	return Transactions
 }
 
-//PopTransactionQueue pops the first transaction in the queue.
-func (TM *Manager) PopTransactionQueue() {
+//popTransactionQueue pops the first transaction in the queue.
+func (TM *manager) popTransactionQueue() {
 	TM.TransactionQueue = TM.TransactionQueue[1:]
 }
 
-//AddTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
-func (TM *Manager) AddTransactionToQueue(t Transaction) {
+//addTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
+func (TM *manager) addTransactionToQueue(t transaction) {
 	TM.TransactionQueue = append(TM.TransactionQueue, t)
 }
 
 //AddTransactionToManager sends Transactions to Manager through a channel.
-func AddTransactionToManager(t Transaction) {
+func AddTransactionToManager(t transaction) {
 	TChannel <- t
 }
 
@@ -140,7 +140,7 @@ func StartTransactionManager(DB *data.Database) {
 	//TransactionManager := NewTransactionManager()
 	for {
 		transaction := <-TChannel
-		go transaction.ExcecuteTransaction(DB)
+		go transaction.excecuteTransaction(DB)
 
 		transactionResults := <-TRChannel
 		fmt.Println(transactionResults)
