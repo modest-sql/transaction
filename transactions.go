@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/modest-sql/data"
-
 	"github.com/modest-sql/common"
 	"github.com/rs/xid"
 )
@@ -34,54 +32,35 @@ var TEChannel = make(chan []error)
 type transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
-	commandsInTransaction []interface{}
+	CommandsInTransaction []common.Command
 	TransactionState      int `json:"Transaction_State"`
 }
 
 //newTransaction creates an instance of Transaction.
-func newTransaction(Commands []interface{}) transaction {
+func newTransaction(commands []common.Command) transaction {
 	T := transaction{
-		xid.New(),
-		make([]string, len(Commands)),
-		Commands,
-		Queued,
+		TransactionID:         xid.New(),
+		CommandsInTransaction: commands,
+		TransactionState:      Queued,
 	}
 
-	T.parseCommandsToQueries()
+	for _, command := range commands {
+		T.TransactionQueries = append(T.TransactionQueries, command.String())
+	}
 
 	return T
 }
 
-/*parseCommandsToQueries interprets the commands in a Transaction and
-stores a queries relative to those commands.*/
-func (T *transaction) parseCommandsToQueries() {
-	for index := 0; index < len(T.commandsInTransaction); index++ {
-		switch v := T.commandsInTransaction[index].(type) {
-		case *common.CreateTableCommand:
-			CTC := common.CreateTableCommand(*v)
-			T.TransactionQueries[index] = "CREATE TABLE " + CTC.TableName() + "."
-
-		case *common.SelectTableCommand:
-			STC := common.SelectTableCommand(*v)
-			T.TransactionQueries[index] = "SELECT * FROM TABLE " + STC.SourceTable() + "."
-
-		default:
-			T.TransactionQueries[index] = "UNKNOWN QUERY."
-			_ = v
-		}
-	}
-}
-
 //excecuteTransaction excectes the commands inside a transaction.
-func (T *transaction) excecuteTransaction(DB *data.Database) {
+func (T *transaction) excecuteTransaction() {
 	transactionLock.Lock()
 	T.TransactionState = InProgress
 
 	ExcecutionResults := make([]interface{}, 0)
 	ExcecutionErrors := make([]error, 0)
 
-	for index := 0; index < len(T.commandsInTransaction); index++ {
-		ExcecutionResult, ExcecutionError := DB.ExecuteCommand(T.commandsInTransaction[index])
+	for _, command := range T.CommandsInTransaction {
+		ExcecutionResult, ExcecutionError := command.Instruction()
 		ExcecutionResults = append(ExcecutionResults, ExcecutionResult)
 		ExcecutionErrors = append(ExcecutionErrors, ExcecutionError)
 	}
@@ -136,11 +115,11 @@ func AddTransactionToManager(t transaction) {
 /*StartTransactionManager is ment to be called once by the engine, afterwards it will receive incoming
 transactions and will add them to its queue and then will excecute them by moving it into the excecution
 batch.*/
-func StartTransactionManager(DB *data.Database) {
+func StartTransactionManager() {
 	//TransactionManager := NewTransactionManager()
 	for {
 		transaction := <-TChannel
-		go transaction.excecuteTransaction(DB)
+		go transaction.excecuteTransaction()
 
 		transactionResults := <-TRChannel
 		fmt.Println(transactionResults)
