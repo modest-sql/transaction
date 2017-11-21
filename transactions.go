@@ -98,13 +98,11 @@ func (T *Transaction) ExcecuteTransaction(DB *data.Database) {
 //Manager instance definition.
 type Manager struct {
 	TransactionQueue []Transaction `json:"TransactionQueue"`
-	ExcecutionBatch  []Transaction `json:"ExcecutionBatch"`
 }
 
 //NewTransactionManager creates an instance of TransactionManger.
 func NewTransactionManager() Manager {
 	return Manager{
-		make([]Transaction, 0),
 		make([]Transaction, 0),
 	}
 }
@@ -112,10 +110,6 @@ func NewTransactionManager() Manager {
 //GetTransactions returns a Transaction array containing both, Transactions in queue and in excution batch.
 func (TM *Manager) GetTransactions() []Transaction {
 	Transactions := make([]Transaction, 0)
-
-	for index := 0; index < len(TM.ExcecutionBatch); index++ {
-		Transactions = append(Transactions, TM.ExcecutionBatch[index])
-	}
 
 	for index := 0; index < len(TM.TransactionQueue); index++ {
 		Transactions = append(Transactions, TM.TransactionQueue[index])
@@ -129,44 +123,9 @@ func (TM *Manager) PopTransactionQueue() {
 	TM.TransactionQueue = TM.TransactionQueue[1:]
 }
 
-//PopExcecutiontionQueue pops the first transaction in the excecution batch.
-func (TM *Manager) PopExcecutiontionQueue() {
-	TM.ExcecutionBatch = TM.ExcecutionBatch[1:]
-}
-
 //AddTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
 func (TM *Manager) AddTransactionToQueue(t Transaction) {
 	TM.TransactionQueue = append(TM.TransactionQueue, t)
-}
-
-/*PrepareExcecutionBatch adds BATCH_SIZE amount of Transactions from the TransactionManager
-TransactionQueue into the ExcecutionQueue for them to be excecuted.*/
-func (TM *Manager) PrepareExcecutionBatch() {
-	if len(TM.TransactionQueue) > BatchSize {
-		for index := 0; index < BatchSize; index++ {
-			TM.ExcecutionBatch[index] = TM.TransactionQueue[index]
-		}
-		for index := 0; index < BatchSize; index++ {
-			TM.PopTransactionQueue()
-		}
-
-	} else {
-		for index := 0; len(TM.TransactionQueue) != 0; index++ {
-			TM.ExcecutionBatch[index] = TM.TransactionQueue[index]
-			TM.PopTransactionQueue()
-		}
-	}
-}
-
-//ExcecuteBatch Transactions are executed serialized.
-func (TM *Manager) ExcecuteBatch() {
-	for index := 0; index < len(TM.ExcecutionBatch); index++ {
-		//go TM.ExcecutionBatch[index].ExcecuteTransaction()
-	}
-
-	for index := 0; index < len(TM.ExcecutionBatch); index++ {
-		TM.PopTransactionQueue()
-	}
 }
 
 //AddTransactionToManager sends Transactions to Manager through a channel.
@@ -182,74 +141,10 @@ func StartTransactionManager(DB *data.Database) {
 	for {
 		transaction := <-TChannel
 		go transaction.ExcecuteTransaction(DB)
-		fmt.Println("EJECUTO.")
-		/*TransactionManager.AddTransactionToQueue(transaction)
-
-		if len(TransactionManager.TransactionQueue) != 0 {
-			for index := 0; index < len(TransactionManager.TransactionQueue); index++ {
-				go TransactionManager.TransactionQueue[index].ExcecuteTransaction(DB)
-			}
-
-			for index := 0; len(TransactionManager.TransactionQueue) != 0; index++ {
-				TransactionManager.PopTransactionQueue()
-			}
-		}*/
 
 		transactionResults := <-TRChannel
 		fmt.Println(transactionResults)
-		//transactionErrors := <-TEChannel
-		//fmt.Println(transactionErrors)*/
+		transactionErrors := <-TEChannel
+		fmt.Println(transactionErrors)
 	}
 }
-
-/*
-func main() {
-	fmt.Println("TESTGROUND")
-
-	Database, _ := data.NewDatabase("Test_Database")
-
-	IC := common.NewIntegerTableColumn("ID", 0, false, false)
-	CC := common.NewCharTableColumn("Name", "-", false, false, 20)
-
-	TCD := make([]common.TableColumnDefiner, 0)
-
-	TCD = append(TCD, IC)
-	TCD = append(TCD, CC)
-
-	CTC1 := common.NewCreateTableCommand("TEST_TABLE_1", TCD)
-	CTC2 := common.NewCreateTableCommand("TEST_TABLE_2", TCD)
-	CTC3 := common.NewCreateTableCommand("TEST_TABLE_3", TCD)
-	//CTC4 := common.NewCreateTableCommand("TEST_TABLE_4", TCD)
-
-	COMMANDS := make([]interface{}, 0)
-
-	COMMANDS = append(COMMANDS, CTC1)
-	COMMANDS = append(COMMANDS, CTC2)
-	COMMANDS = append(COMMANDS, CTC3)
-	//COMMANDS = append(COMMANDS, CTC4)
-
-	TRANSACTION := NewTransaction(COMMANDS)
-
-	for index := 0; index < len(TRANSACTION.commandsInTransaction); index++ {
-		switch TRANSACTION.commandsInTransaction[index].(type) {
-		case *common.CreateTableCommand:
-			fmt.Println("CREATE")
-		case *common.InsertCommand:
-			fmt.Println("INSERT")
-		case *common.SelectTableCommand:
-			fmt.Println("SELECT")
-		}
-	}
-
-	go StartTransactionManager(Database)
-
-	TChannel <- TRANSACTION
-	//TChannel <- TRANSACTION
-	//TChannel <- TRANSACTION
-	//TChannel <- TRANSACTION
-
-	time.Sleep(4000 * time.Millisecond)
-
-	fmt.Println(Database.AllTables())
-}
-*/
