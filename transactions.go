@@ -23,7 +23,7 @@ var tChannel = make(chan Transaction)
 
 var tManager manager
 
-//transaction instance definition.
+//Transaction instance definition.
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
@@ -64,7 +64,7 @@ type manager struct {
 	TransactionQueue []Transaction `json:"TransactionQueue"`
 }
 
-//GetTransactions returns a Transaction array containing both, Transactions in queue and in excution batch.
+//GetTransactions returns the array of transactions in memory.
 func GetTransactions() []Transaction {
 	Transactions := make([]Transaction, 0)
 
@@ -91,7 +91,7 @@ func (TM *manager) addTransactionToQueue(t Transaction) {
 	transactionQueriesLock.Unlock()
 }
 
-//AddTransactionToManager sends Transactions to Manager through a channel.
+//AddCommands prepares the commands to be run in a transaction.
 func AddCommands(commands []common.Command) {
 	tChannel <- newTransaction(commands)
 }
