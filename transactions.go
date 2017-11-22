@@ -1,7 +1,6 @@
 package transaction
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/modest-sql/common"
@@ -13,23 +12,19 @@ const (
 	Queued = iota
 	InProgress
 	Done
-	BatchSize = 5
 )
 
 //transactionLock is the global transaction mutex
 var transactionLock sync.Mutex
+var transactionQueriesLock sync.Mutex
 
 //TChannel is used to communicate with StartTransactionManager
-var TChannel = make(chan transaction)
+var tChannel = make(chan Transaction)
 
-//TRChannel is used to deliver the result of the treansactions.
-var TRChannel = make(chan []interface{})
+var tManager manager
 
-//TEChannel is used to deliver the errors, if any, of the transactions.
-var TEChannel = make(chan []error)
-
-//transaction instance definition.
-type transaction struct {
+//Transaction instance definition.
+type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
 	CommandsInTransaction []common.Command
@@ -37,8 +32,8 @@ type transaction struct {
 }
 
 //newTransaction creates an instance of Transaction.
-func newTransaction(commands []common.Command) transaction {
-	T := transaction{
+func newTransaction(commands []common.Command) Transaction {
+	T := Transaction{
 		TransactionID:         xid.New(),
 		CommandsInTransaction: commands,
 		TransactionState:      Queued,
@@ -52,23 +47,13 @@ func newTransaction(commands []common.Command) transaction {
 }
 
 //excecuteTransaction excectes the commands inside a transaction.
-func (T *transaction) excecuteTransaction() {
+func (T *Transaction) excecuteTransaction() {
 	transactionLock.Lock()
 	T.TransactionState = InProgress
 
-	ExcecutionResults := make([]interface{}, 0)
-	ExcecutionErrors := make([]error, 0)
-
 	for _, command := range T.CommandsInTransaction {
-		ExcecutionResult, ExcecutionError := command.Instruction()
-		ExcecutionResults = append(ExcecutionResults, ExcecutionResult)
-		ExcecutionErrors = append(ExcecutionErrors, ExcecutionError)
+		command.Instruction()
 	}
-
-	//fmt.Println(ExcecutionResults[0])
-
-	TRChannel <- ExcecutionResults
-	//TEChannel <- ExcecutionErrors
 
 	transactionLock.Unlock()
 	T.TransactionState = Done
@@ -76,54 +61,48 @@ func (T *transaction) excecuteTransaction() {
 
 //manager instance definition.
 type manager struct {
-	TransactionQueue []transaction `json:"TransactionQueue"`
+	TransactionQueue []Transaction `json:"TransactionQueue"`
 }
 
-//newTransactionManager creates an instance of TransactionManger.
-func newTransactionManager() manager {
-	return manager{
-		make([]transaction, 0),
-	}
-}
+//GetTransactions returns the array of transactions in memory.
+func GetTransactions() []Transaction {
+	Transactions := make([]Transaction, 0)
 
-//GetTransactions returns a Transaction array containing both, Transactions in queue and in excution batch.
-func (TM *manager) GetTransactions() []transaction {
-	Transactions := make([]transaction, 0)
-
-	for index := 0; index < len(TM.TransactionQueue); index++ {
-		Transactions = append(Transactions, TM.TransactionQueue[index])
+	transactionQueriesLock.Lock()
+	for _, transaction := range tManager.TransactionQueue {
+		Transactions = append(Transactions, transaction)
 	}
+	transactionQueriesLock.Unlock()
 
 	return Transactions
 }
 
 //popTransactionQueue pops the first transaction in the queue.
-func (TM *manager) popTransactionQueue() {
-	TM.TransactionQueue = TM.TransactionQueue[1:]
+func popTransactionQueue() {
+	transactionQueriesLock.Lock()
+	tManager.TransactionQueue = tManager.TransactionQueue[1:]
+	transactionQueriesLock.Unlock()
 }
 
 //addTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
-func (TM *manager) addTransactionToQueue(t transaction) {
-	TM.TransactionQueue = append(TM.TransactionQueue, t)
+func addTransactionToQueue(t Transaction) {
+	transactionQueriesLock.Lock()
+	tManager.TransactionQueue = append(tManager.TransactionQueue, t)
+	transactionQueriesLock.Unlock()
 }
 
-//AddTransactionToManager sends Transactions to Manager through a channel.
-func AddTransactionToManager(t transaction) {
-	TChannel <- t
+//AddCommands prepares the commands to be run in a transaction.
+func AddCommands(commands []common.Command) {
+	tChannel <- newTransaction(commands)
 }
 
 /*StartTransactionManager is ment to be called once by the engine, afterwards it will receive incoming
 transactions and will add them to its queue and then will excecute them by moving it into the excecution
 batch.*/
 func StartTransactionManager() {
-	//TransactionManager := NewTransactionManager()
 	for {
-		transaction := <-TChannel
+		transaction := <-tChannel
+		addTransactionToQueue(transaction)
 		go transaction.excecuteTransaction()
-
-		transactionResults := <-TRChannel
-		fmt.Println(transactionResults)
-		transactionErrors := <-TEChannel
-		fmt.Println(transactionErrors)
 	}
 }
