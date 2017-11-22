@@ -78,16 +78,16 @@ func GetTransactions() []Transaction {
 }
 
 //popTransactionQueue pops the first transaction in the queue.
-func (TM *manager) popTransactionQueue() {
+func popTransactionQueue() {
 	transactionQueriesLock.Lock()
-	TM.TransactionQueue = TM.TransactionQueue[1:]
+	tManager.TransactionQueue = tManager.TransactionQueue[1:]
 	transactionQueriesLock.Unlock()
 }
 
 //addTransactionToQueue adds a new Transaction to the TransactionManager TransactionQueue.
-func (TM *manager) addTransactionToQueue(t Transaction) {
+func addTransactionToQueue(t Transaction) {
 	transactionQueriesLock.Lock()
-	TM.TransactionQueue = append(TM.TransactionQueue, t)
+	tManager.TransactionQueue = append(tManager.TransactionQueue, t)
 	transactionQueriesLock.Unlock()
 }
 
@@ -102,7 +102,7 @@ batch.*/
 func StartTransactionManager() {
 	for {
 		transaction := <-tChannel
-		tManager.addTransactionToQueue(transaction)
+		addTransactionToQueue(transaction)
 		go transaction.excecuteTransaction()
 	}
 }
