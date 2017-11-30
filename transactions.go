@@ -27,7 +27,7 @@ var tManager manager
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
-	CommandsInTransaction []common.Command
+	commandsInTransaction []common.Command
 	TransactionState      int `json:"Transaction_State"`
 }
 
@@ -35,7 +35,7 @@ type Transaction struct {
 func newTransaction(commands []common.Command) Transaction {
 	T := Transaction{
 		TransactionID:         xid.New(),
-		CommandsInTransaction: commands,
+		commandsInTransaction: commands,
 		TransactionState:      Queued,
 	}
 
@@ -51,7 +51,7 @@ func (T *Transaction) excecuteTransaction() {
 	transactionLock.Lock()
 	T.TransactionState = InProgress
 
-	for _, command := range T.CommandsInTransaction {
+	for _, command := range T.commandsInTransaction {
 		command.Instruction()
 	}
 
