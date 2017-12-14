@@ -71,7 +71,7 @@ type Transaction struct {
 func NewTransaction(commands []common.Command) Transaction {
 	T := Transaction{
 		TransactionID:         xid.New(),
-		CommandsInTransaction: commands,
+		commandsInTransaction: commands,
 		TransactionState:      Queued,
 		CurrentComand:         "None in excecution yet.",
 	}
@@ -135,7 +135,6 @@ func (T *Transaction) excecuteTransaction() {
 		default:
 			fmt.Println("Unknown")
 		}
-	}
 
 	T.TransactionState = Done
 	T.CurrentComand = "Transaction Finished."
