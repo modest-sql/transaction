@@ -41,6 +41,12 @@ var config TransactionConfiguration
 
 //TransactionConfiguration contains configuration options read from a json file.
 type TransactionConfiguration struct {
+	Host        json.Number `json:"Host"`
+	Port        json.Number `json:"Port"`
+	Root        json.Number `json:"Root"`
+	MaxSessions json.Number `json:"MaxSessions"`
+	BlockSize   json.Number `json:"BlockSize"`
+
 	//commandsDelay determines the delay in seconds between the excecution of each command in a transaction.
 	CommandsDelay json.Number `json:"excecution_delay"`
 
@@ -49,7 +55,7 @@ type TransactionConfiguration struct {
 }
 
 func init() {
-	jsonFile, _ := os.Open("config.json")
+	jsonFile, _ := os.Open("settings.json")
 
 	defer jsonFile.Close()
 
@@ -200,7 +206,7 @@ func StartTransactionManager() {
 
 func executeBatch(actualBatchSize int) {
 	Threads, _ := config.TransactionThreads.Int64()
-	if len(transactionManager.TransactionQueue) > 0 {
+	if actualBatchSize > 0 {
 		if actualBatchSize < int(Threads) {
 			//DETERMINE TRANSACTION'S RELEVANCE.
 			TRANSACTIONDESIGNATION := make([]int, actualBatchSize)
