@@ -142,8 +142,10 @@ func (T *Transaction) excecuteTransaction() {
 			fmt.Println("Unknown")
 		}
 
+		T.CurrentComand = "Transaction Finished."
+	}
+
 	T.TransactionState = Done
-	T.CurrentComand = "Transaction Finished."
 	execWaitGroup.Done()
 
 }
