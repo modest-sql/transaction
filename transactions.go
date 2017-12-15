@@ -62,7 +62,7 @@ func init() {
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
-	CommandsInTransaction []common.Command
+	commandsInTransaction []common.Command
 	TransactionState      int    `json:"Transaction_State"`
 	CurrentComand         string `json:"Current_Command"`
 }
@@ -90,21 +90,21 @@ func (T *Transaction) excecuteTransaction() {
 	MutexesMap := new(sync.Map)
 
 	//ADD A RWMUTEX FOR EACH TABLE INVOLVED IN THIS TRANSACTION EXCECUTION QUEUE.
-	for i := 0; i < len(T.CommandsInTransaction); i++ {
-		MutexesMap.Store(T.CommandsInTransaction[i].TableName(), &sync.RWMutex{})
+	for i := 0; i < len(T.commandsInTransaction); i++ {
+		MutexesMap.Store(T.commandsInTransaction[i].TableName(), &sync.RWMutex{})
 	}
 
 	//INSERT LOCKS IN-BETWEEN COMMANDS.
 	XSLOCKEDTRANSACTION := make([]interface{}, 0)
 
-	for i := 0; i < len(T.CommandsInTransaction); i++ {
-		if T.CommandsInTransaction[i].InstructionType == 1 {
+	for i := 0; i < len(T.commandsInTransaction); i++ {
+		if T.commandsInTransaction[i].InstructionType == 1 {
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "RLOCK")
-			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.CommandsInTransaction[i])
+			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.commandsInTransaction[i])
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "RUNLOCK")
 		} else {
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "LOCK")
-			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.CommandsInTransaction[i])
+			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.commandsInTransaction[i])
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "UNLOCK")
 		}
 	}
@@ -136,10 +136,11 @@ func (T *Transaction) excecuteTransaction() {
 			fmt.Println("Unknown")
 		}
 
-	T.TransactionState = Done
-	T.CurrentComand = "Transaction Finished."
-	execWaitGroup.Done()
+		T.TransactionState = Done
+		T.CurrentComand = "Transaction Finished."
+		execWaitGroup.Done()
 
+	}
 }
 
 //manager instance definition.
@@ -204,12 +205,12 @@ func executeBatch(actualBatchSize int) {
 			//DETERMINE TRANSACTION'S RELEVANCE.
 			TRANSACTIONDESIGNATION := make([]int, actualBatchSize)
 			for i := 0; i < actualBatchSize; i++ {
-				for j := 0; j < len(transactionManager.TransactionQueue[i].CommandsInTransaction); j++ {
-					if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 0 {
+				for j := 0; j < len(transactionManager.TransactionQueue[i].commandsInTransaction); j++ {
+					if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 0 {
 						if TRANSACTIONDESIGNATION[i] != 2 {
 							TRANSACTIONDESIGNATION[i] = 1
 						}
-					} else if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 5 {
+					} else if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 5 {
 						TRANSACTIONDESIGNATION[i] = 2
 					} else {
 						//Do nothing
@@ -268,12 +269,12 @@ func executeBatch(actualBatchSize int) {
 			//DETERMINE TRANSACTION'S RELEVANCE.
 			TRANSACTIONDESIGNATION := make([]int, Threads)
 			for i := 0; i < int(Threads); i++ {
-				for j := 0; j < len(transactionManager.TransactionQueue[i].CommandsInTransaction); j++ {
-					if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 0 {
+				for j := 0; j < len(transactionManager.TransactionQueue[i].commandsInTransaction); j++ {
+					if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 0 {
 						if TRANSACTIONDESIGNATION[i] != 2 {
 							TRANSACTIONDESIGNATION[i] = 1
 						}
-					} else if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 5 {
+					} else if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 5 {
 						TRANSACTIONDESIGNATION[i] = 2
 					} else {
 						//Do nothing
