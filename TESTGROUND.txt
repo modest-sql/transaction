@@ -1,0 +1,52 @@
+//Print0 is a dummy function.
+func Print0() {
+	fmt.Println("FUNCTION CREATE EXCECUTED.")
+	time.Sleep(time.Second * 2)
+}
+
+type Table struct {
+	Name string
+}
+
+func (T Table) TableName() string {
+	return T.Name
+}
+
+func main() {
+
+	C0 := common.NewCommand(Table{"Table_1"}, 0, Print0)
+
+	COMMANDS := make([]common.Command, 0)
+	COMMANDS = append(COMMANDS, C0)
+
+	go StartTransactionManager()
+
+	time.Sleep(time.Second * 2)
+
+	go AddCommands(COMMANDS)
+	go AddCommands(COMMANDS)
+	go AddCommands(COMMANDS)
+	go AddCommands(COMMANDS)
+	go AddCommands(COMMANDS)
+	go AddCommands(COMMANDS)
+
+	time.Sleep(time.Second * 1000)
+}
+
+//RunThread runs a thread.
+func RunThread(n int) {
+	fmt.Printf("Running thread with id: %d \n", n)
+	time.Sleep(time.Second * 5)
+	execWaitGroup.Done()
+}
+
+Operations:
+-INSERT
+-CREATE
+-DELETE
+-DROP
+-SELECT
+-UPDATE
+
+LOCK->X(Exclusive)(CREATE, INSERT, UPDATE, DELETE, DROP)
+LOCK->S(Shared)(SELECT)
