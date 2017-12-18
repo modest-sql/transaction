@@ -46,13 +46,13 @@ type TransactionConfiguration struct {
 	BlockSize   json.Number `json:"BlockSize"`
 
 	//commandsDelay determines the delay in seconds between the excecution of each command in a transaction.
-	CommandsDelay json.Number `json:"excecution_delay"`
+	CommandsDelay json.Number `json:"ExecutionDelay"`
 
 	//transactionThreads determines the ammount of transactions to be run concurrently.
-	TransactionThreads json.Number `json:"execution_batch_size"`
+	TransactionThreads json.Number `json:"ExecutionBatchSize"`
 
 	//InstructionsShowcase determines the amount of instructions per transaction to be showed in the client.
-	InstructionsShowcase json.Number `json:"instructions_per_transaction"`
+	InstructionsShowcase json.Number `json:"InstructionsPerTransaction"`
 }
 
 var config TransactionConfiguration
