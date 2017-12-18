@@ -37,8 +37,6 @@ var tChannel = make(chan Transaction)
 //tManager is the Transaction Manager global instance.
 var transactionManager manager
 
-var config TransactionConfiguration
-
 //TransactionConfiguration contains configuration options read from a json file.
 type TransactionConfiguration struct {
 	Host        json.Number `json:"Host"`
@@ -52,7 +50,12 @@ type TransactionConfiguration struct {
 
 	//transactionThreads determines the ammount of transactions to be run concurrently.
 	TransactionThreads json.Number `json:"execution_batch_size"`
+
+	//InstructionsShowcase determines the amount of instructions per transaction to be showed in the client.
+	InstructionsShowcase json.Number `json:"instructions_per_transaction"`
 }
+
+var config TransactionConfiguration
 
 func init() {
 	jsonFile, _ := os.Open("settings.json")
@@ -68,7 +71,7 @@ func init() {
 type Transaction struct {
 	TransactionID         xid.ID   `json:"Transaction_ID"`
 	TransactionQueries    []string `json:"TransactionQueries"`
-	commandsInTransaction []common.Command
+	CommandsInTransaction []common.Command
 	TransactionState      int    `json:"Transaction_State"`
 	CurrentComand         string `json:"Current_Command"`
 }
@@ -77,7 +80,7 @@ type Transaction struct {
 func NewTransaction(commands []common.Command) Transaction {
 	T := Transaction{
 		TransactionID:         xid.New(),
-		commandsInTransaction: commands,
+		CommandsInTransaction: commands,
 		TransactionState:      Queued,
 		CurrentComand:         "None in excecution yet.",
 	}
@@ -96,21 +99,21 @@ func (T *Transaction) excecuteTransaction() {
 	MutexesMap := new(sync.Map)
 
 	//ADD A RWMUTEX FOR EACH TABLE INVOLVED IN THIS TRANSACTION EXCECUTION QUEUE.
-	for i := 0; i < len(T.commandsInTransaction); i++ {
-		MutexesMap.Store(T.commandsInTransaction[i].TableName(), &sync.RWMutex{})
+	for i := 0; i < len(T.CommandsInTransaction); i++ {
+		MutexesMap.Store(T.CommandsInTransaction[i].TableName(), &sync.RWMutex{})
 	}
 
 	//INSERT LOCKS IN-BETWEEN COMMANDS.
 	XSLOCKEDTRANSACTION := make([]interface{}, 0)
 
-	for i := 0; i < len(T.commandsInTransaction); i++ {
-		if T.commandsInTransaction[i].InstructionType == 1 {
+	for i := 0; i < len(T.CommandsInTransaction); i++ {
+		if T.CommandsInTransaction[i].InstructionType == 1 {
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "RLOCK")
-			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.commandsInTransaction[i])
+			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.CommandsInTransaction[i])
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "RUNLOCK")
 		} else {
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "LOCK")
-			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.commandsInTransaction[i])
+			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, T.CommandsInTransaction[i])
 			XSLOCKEDTRANSACTION = append(XSLOCKEDTRANSACTION, "UNLOCK")
 		}
 	}
@@ -142,10 +145,10 @@ func (T *Transaction) excecuteTransaction() {
 			fmt.Println("Unknown")
 		}
 
-		T.CurrentComand = "Transaction Finished."
 	}
 
 	T.TransactionState = Done
+	T.CurrentComand = "Transaction Finished."
 	execWaitGroup.Done()
 
 }
@@ -158,10 +161,21 @@ type manager struct {
 //GetTransactions returns the array of transactions in memory.
 func GetTransactions() []Transaction {
 	Transactions := make([]Transaction, 0)
+	ShowXInstructions, _ := config.InstructionsShowcase.Int64()
 
 	transactionQueriesLock.Lock()
 	for _, transaction := range transactionManager.TransactionQueue {
-		Transactions = append(Transactions, transaction)
+		if len(transaction.CommandsInTransaction) < int(ShowXInstructions) {
+			Transactions = append(Transactions, transaction)
+		} else {
+			T := Transaction{
+				TransactionID:         transaction.TransactionID,
+				CommandsInTransaction: transaction.CommandsInTransaction[:int(ShowXInstructions)],
+				TransactionState:      transaction.TransactionState,
+				CurrentComand:         transaction.CurrentComand,
+			}
+			Transactions = append(Transactions, T)
+		}
 	}
 	transactionQueriesLock.Unlock()
 
@@ -212,12 +226,12 @@ func executeBatch(actualBatchSize int) {
 			//DETERMINE TRANSACTION'S RELEVANCE.
 			TRANSACTIONDESIGNATION := make([]int, actualBatchSize)
 			for i := 0; i < actualBatchSize; i++ {
-				for j := 0; j < len(transactionManager.TransactionQueue[i].commandsInTransaction); j++ {
-					if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 0 {
+				for j := 0; j < len(transactionManager.TransactionQueue[i].CommandsInTransaction); j++ {
+					if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 0 {
 						if TRANSACTIONDESIGNATION[i] != 2 {
 							TRANSACTIONDESIGNATION[i] = 1
 						}
-					} else if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 5 {
+					} else if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 5 {
 						TRANSACTIONDESIGNATION[i] = 2
 					} else {
 						//Do nothing
@@ -276,12 +290,12 @@ func executeBatch(actualBatchSize int) {
 			//DETERMINE TRANSACTION'S RELEVANCE.
 			TRANSACTIONDESIGNATION := make([]int, Threads)
 			for i := 0; i < int(Threads); i++ {
-				for j := 0; j < len(transactionManager.TransactionQueue[i].commandsInTransaction); j++ {
-					if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 0 {
+				for j := 0; j < len(transactionManager.TransactionQueue[i].CommandsInTransaction); j++ {
+					if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 0 {
 						if TRANSACTIONDESIGNATION[i] != 2 {
 							TRANSACTIONDESIGNATION[i] = 1
 						}
-					} else if transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].commandsInTransaction[j].InstructionType == 5 {
+					} else if transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 4 || transactionManager.TransactionQueue[i].CommandsInTransaction[j].InstructionType == 5 {
 						TRANSACTIONDESIGNATION[i] = 2
 					} else {
 						//Do nothing

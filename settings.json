@@ -6,5 +6,6 @@
     "MaxSessions"  : 10,
     "BlockSize": 131072,
     "excecution_delay" : 1,
-    "execution_batch_size" : 2
+    "execution_batch_size" : 2,
+    "instructions_per_transaction" : 2
 }
