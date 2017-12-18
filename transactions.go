@@ -2,8 +2,8 @@ package transaction
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -37,8 +37,6 @@ var tChannel = make(chan Transaction)
 //tManager is the Transaction Manager global instance.
 var transactionManager manager
 
-var config TransactionConfiguration
-
 //TransactionConfiguration contains configuration options read from a json file.
 type TransactionConfiguration struct {
 	Host        json.Number `json:"Host"`
@@ -48,11 +46,16 @@ type TransactionConfiguration struct {
 	BlockSize   json.Number `json:"BlockSize"`
 
 	//commandsDelay determines the delay in seconds between the excecution of each command in a transaction.
-	CommandsDelay json.Number `json:"excecution_delay"`
+	CommandsDelay json.Number `json:"ExecutionDelay"`
 
 	//transactionThreads determines the ammount of transactions to be run concurrently.
-	TransactionThreads json.Number `json:"execution_batch_size"`
+	TransactionThreads json.Number `json:"ExecutionBatchSize"`
+
+	//InstructionsShowcase determines the amount of instructions per transaction to be showed in the client.
+	InstructionsShowcase json.Number `json:"InstructionsPerTransaction"`
 }
+
+var config TransactionConfiguration
 
 func init() {
 	jsonFile, _ := os.Open("settings.json")
@@ -139,13 +142,13 @@ func (T *Transaction) excecuteTransaction() {
 			time.Sleep(time.Second * time.Duration(Delay))
 			T.CurrentComand = "Waiting..."
 		default:
-			fmt.Println("Unknown")
+			log.Println("Transaction Manager: Expected string or common.Command object")
 		}
 
-		T.CurrentComand = "Transaction Finished."
 	}
 
 	T.TransactionState = Done
+	T.CurrentComand = "Transaction Finished."
 	execWaitGroup.Done()
 
 }
@@ -158,11 +161,23 @@ type manager struct {
 //GetTransactions returns the array of transactions in memory.
 func GetTransactions() []Transaction {
 	Transactions := make([]Transaction, 0)
+	ShowXInstructions, _ := config.InstructionsShowcase.Int64()
 
 	transactionQueriesLock.Lock()
 	for _, transaction := range transactionManager.TransactionQueue {
-		Transactions = append(Transactions, transaction)
+		if len(transaction.commandsInTransaction) < int(ShowXInstructions) {
+			Transactions = append(Transactions, transaction)
+		} else {
+			T := Transaction{
+				TransactionID:      transaction.TransactionID,
+				TransactionQueries: transaction.TransactionQueries[:int(ShowXInstructions)],
+				TransactionState:   transaction.TransactionState,
+				CurrentComand:      transaction.CurrentComand,
+			}
+			Transactions = append(Transactions, T)
+		}
 	}
+
 	transactionQueriesLock.Unlock()
 
 	return Transactions

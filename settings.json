@@ -5,6 +5,7 @@
     "Root" : "./databases/",
     "MaxSessions"  : 10,
     "BlockSize": 131072,
-    "excecution_delay" : 1,
-    "execution_batch_size" : 2
+    "ExecutionDelay" : 1,
+    "ExecutionBatchSize" : 2,
+    "InstructionsPerTransaction" : 2
 }
