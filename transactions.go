@@ -169,14 +169,15 @@ func GetTransactions() []Transaction {
 			Transactions = append(Transactions, transaction)
 		} else {
 			T := Transaction{
-				TransactionID:         transaction.TransactionID,
-				commandsInTransaction: transaction.commandsInTransaction[:int(ShowXInstructions)],
-				TransactionState:      transaction.TransactionState,
-				CurrentComand:         transaction.CurrentComand,
+				TransactionID:      transaction.TransactionID,
+				TransactionQueries: transaction.TransactionQueries[:int(ShowXInstructions)],
+				TransactionState:   transaction.TransactionState,
+				CurrentComand:      transaction.CurrentComand,
 			}
 			Transactions = append(Transactions, T)
 		}
 	}
+
 	transactionQueriesLock.Unlock()
 
 	return Transactions
