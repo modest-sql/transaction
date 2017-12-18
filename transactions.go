@@ -2,8 +2,8 @@ package transaction
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -142,7 +142,7 @@ func (T *Transaction) excecuteTransaction() {
 			time.Sleep(time.Second * time.Duration(Delay))
 			T.CurrentComand = "Waiting..."
 		default:
-			fmt.Println("Unknown")
+			log.Println("Transaction Manager: Expected string or common.Command object")
 		}
 
 	}
